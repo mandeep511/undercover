@@ -18,16 +18,16 @@ const App = {
   // Word pairs data
   wordPairs: {
     "easy": [
-      { "a": "Sofa", "b": "Couch", "tags": ["household", "furniture"] },
-      { "a": "Cup", "b": "Mug", "tags": ["household", "kitchen"] },
-      { "a": "Road", "b": "Street", "tags": ["places", "transport"] },
-      { "a": "House", "b": "Home", "tags": ["places", "household"] },
-      { "a": "Happy", "b": "Joyful", "tags": ["emotions", "concepts"] },
-      { "a": "Boat", "b": "Ship", "tags": ["transport", "vehicles"] },
-      { "a": "Dog", "b": "Puppy", "tags": ["animals", "pets"] },
-      { "a": "Doctor", "b": "Nurse", "tags": ["professions", "people"] },
-      { "a": "Shirt", "b": "T-shirt", "tags": ["fashion", "clothing"] },
-      { "a": "Phone", "b": "Smartphone", "tags": ["technology", "electronics"] }
+      { "a": "Armchair", "b": "Recliner", "tags": ["household", "furniture"] },
+      { "a": "Mason Jar", "b": "Carafe", "tags": ["household", "kitchen"] },
+      { "a": "Boulevard", "b": "Avenue", "tags": ["places", "transport"] },
+      { "a": "Cottage", "b": "Cabin", "tags": ["places", "household"] },
+      { "a": "Content", "b": "Satisfied", "tags": ["emotions", "concepts"] },
+      { "a": "Yacht", "b": "Cruise Ship", "tags": ["transport", "vehicles"] },
+      { "a": "Husky", "b": "Retriever", "tags": ["animals", "pets"] },
+      { "a": "Surgeon", "b": "Anesthesiologist", "tags": ["professions", "people"] },
+      { "a": "Hoodie", "b": "Sweatshirt", "tags": ["fashion", "clothing"] },
+      { "a": "Landline", "b": "Mobile Phone", "tags": ["technology", "electronics"] }
     ],
     mixed: [
       // human suggested pairs
@@ -46,14 +46,14 @@ const App = {
       { a: "Bath", b: "Shower", tags: ["household", "actions"] },
       // ai suggested pairs
       { a: "Pillow", b: "Blanket", tags: ["household", "bedroom"] },
-      { a: "Mug", b: "Glass", tags: ["household", "kitchen"] },
-      { a: "Coffee", b: "Tea", tags: ["food", "drinks"] },
+      { a: "Wine Glass", b: "Champagne Flute", tags: ["household", "kitchen"] },
+      { a: "Espresso", b: "Cappuccino", tags: ["food", "drinks"] },
       { a: "Laptop", b: "Tablet", tags: ["technology", "electronics"] },
       { a: "River", b: "Lake", tags: ["nature", "geography"] },
       { a: "Broom", b: "Mop", tags: ["household", "cleaning"] },
       { a: "Key", b: "Credit Card", tags: ["everyday", "items"] },
       { a: "Cake", b: "Pie", tags: ["food", "dessert"] },
-      { a: "Lion", b: "Tiger", tags: ["animals", "mammals"] },
+      { a: "Tiger", b: "Leopard", tags: ["animals", "mammals"] },
       { a: "Stairs", b: "Ladder", tags: ["household", "transport"] },
       { a: "Painting", b: "Photography", tags: ["art", "hobbies"] },
       { a: "Watch", b: "Bracelet", tags: ["fashion", "accessories"] },
@@ -69,24 +69,24 @@ const App = {
       { a: "Running", b: "Swimming", tags: ["sports", "actions"] },
       { a: "New York", b: "Tokyo", tags: ["places", "cities"] },
       { a: "Batman", b: "Superman", tags: ["pop culture", "superheroes"] },
-      { a: "Apple", b: "Orange", tags: ["food", "fruit"] },
-      { a: "Sun", b: "Moon", tags: ["nature", "space"] },
+      { a: "Grapefruit", b: "Pomegranate", tags: ["food", "fruit"] },
+      { a: "Star", b: "Planet", tags: ["nature", "space"] },
       { a: "Dream", b: "Goal", tags: ["concepts", "life"] },
-      { a: "Rain", b: "Snow", tags: ["nature", "weather"] },
+      { a: "Hail", b: "Sleet", tags: ["nature", "weather"] },
       { a: "Talent", b: "Skill", tags: ["concepts", "abilities"] },
       { a: "Joke", b: "Story", tags: ["communication", "concepts"] },
     ],
     "hard": [
-      { "a": "Time", "b": "Money", "tags": ["concepts", "abstract", "life"] },
-      { "a": "Root", "b": "Anchor", "tags": ["concepts", "analogy"] },
-      { "a": "Seed", "b": "Idea", "tags": ["concepts", "abstract"] },
-      { "a": "Key", "b": "Password", "tags": ["technology", "concepts", "security"] },
-      { "a": "Library", "b": "Internet", "tags": ["places", "technology", "information"] },
-      { "a": "Map", "b": "Calendar", "tags": ["tools", "concepts", "organization"] },
-      { "a": "Heart", "b": "Engine", "tags": ["analogy", "science", "mechanics"] },
-      { "a": "Mirror", "b": "Book", "tags": ["household", "concepts", "abstract"] },
-      { "a": "Prison", "b": "School", "tags": ["places", "institutions", "society"] },
-      { "a": "Police", "b": "Teacher", "tags": ["professions", "people", "society"] }
+      { "a": "Moment", "b": "Opportunity", "tags": ["concepts", "abstract", "life"] },
+      { "a": "Foundation", "b": "Cornerstone", "tags": ["concepts", "analogy"] },
+      { "a": "Germ", "b": "Concept", "tags": ["concepts", "abstract"] },
+      { "a": "Cipher", "b": "Credential", "tags": ["technology", "concepts", "security"] },
+      { "a": "Archive", "b": "Database", "tags": ["places", "technology", "information"] },
+      { "a": "Blueprint", "b": "Agenda", "tags": ["tools", "concepts", "organization"] },
+      { "a": "Core", "b": "Drivetrain", "tags": ["analogy", "science", "mechanics"] },
+      { "a": "Prism", "b": "Manuscript", "tags": ["household", "concepts", "abstract"] },
+      { "a": "Reformatory", "b": "Academy", "tags": ["places", "institutions", "society"] },
+      { "a": "Guardian", "b": "Mentor", "tags": ["professions", "people", "society"] }
     ]
   },
 
