@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Undercover - Social Deduction Game</title>
+  <link rel="stylesheet" href="css/design-system.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/screens.css">
+</head>
+
+<body>
+  <div class="app" id="app">
+    <!-- Home Screen -->
+    <div class="screen active" id="homeScreen">
+      <div class="header">
+        <div class="logo">🎭 Undercover</div>
+        <div class="subtitle">Social Deduction Word Game</div>
+      </div>
+
+      <button class="btn btn-primary" onclick="quickStart()">Quick Start</button>
+      <button class="btn btn-secondary" onclick="showScreen('setupScreen')">New Game</button>
+      <button class="btn btn-secondary" onclick="showScreen('teamsScreen')">Teams</button>
+      <button class="btn btn-secondary" onclick="showScreen('settingsScreen')">Settings</button>
+    </div>
+
+    <!-- Setup Screen -->
+    <div class="screen" id="setupScreen">
+      <button class="back-btn" onclick="showScreen('homeScreen')">← Back</button>
+
+      <div class="header">
+        <h2>Game Setup</h2>
+      </div>
+
+      <div class="form-group">
+        <label class="label">Number of Players: <span id="playerCountDisplay">5</span></label>
+        <input type="range" class="input" id="playerCount" min="3" max="20" value="5" oninput="updatePlayerCount()"
+          style="margin-bottom: 24px;">
+      </div>
+
+      <div id="roleConfig">
+        <div class="role-config">
+          <div class="role-name">👥 Civilians</div>
+          <div class="role-controls">
+            <button class="counter-btn" onclick="adjustRole('civilian', -1)">−</button>
+            <div class="counter-value" id="civilianCount">3</div>
+            <button class="counter-btn" onclick="adjustRole('civilian', 1)">+</button>
+          </div>
+        </div>
+
+        <div class="role-config">
+          <div class="role-name">🕵️ Undercover</div>
+          <div class="role-controls">
+            <button class="counter-btn" onclick="adjustRole('undercover', -1)">−</button>
+            <div class="counter-value" id="undercoverCount">1</div>
+            <button class="counter-btn" onclick="adjustRole('undercover', 1)">+</button>
+          </div>
+        </div>
+
+        <div class="role-config">
+          <div class="role-name">❓ Mr. White</div>
+          <div class="role-controls">
+            <button class="counter-btn" onclick="adjustRole('mrWhite', -1)">−</button>
+            <div class="counter-value" id="mrWhiteCount">1</div>
+            <button class="counter-btn" onclick="adjustRole('mrWhite', 1)">+</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="setupError" style="display: none;"></div>
+
+      <button class="btn btn-secondary" id="selectTeamBtn" onclick="Game.setup.showTeamSelection()" style="margin-top: 24px; display: none;">Select Existing Team</button>
+      <button class="btn btn-primary" onclick="startGame()" style="margin-top: 12px;">Start Game</button>
+    </div>
+
+    <!-- Card Reveal Screen -->
+    <div class="screen" id="cardRevealScreen">
+      <div class="header">
+        <h2><span id="currentPlayerNameDisplay">Player 1</span></h2>
+        <p class="subtitle" id="cardRevealSubtitle">Tap a card to reveal your role</p>
+        <p class="subtitle" style="font-size: 12px; margin-top: 4px;">Player <span id="currentPlayerNumber">1</span> of
+          <span id="totalPlayers">5</span></p>
+      </div>
+
+      <div class="card-grid" id="revealCardGrid"></div>
+
+      <div class="fixed-bottom" id="hidePassBtn" style="display: none;">
+        <button class="btn btn-primary" onclick="hideAndPass()">OK / Hide and Pass</button>
+      </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div class="screen" id="gameScreen">
+      <div class="turn-indicator">
+        <div class="current-player" id="currentSpeaker">Player 1</div>
+        <div class="next-player">Next: <span id="nextSpeaker">Player 2</span></div>
+      </div>
+
+      <div class="progress-dots" id="progressDots"></div>
+
+      <div class="card-grid" id="gamePlayerCards"></div>
+
+      <div class="fixed-bottom">
+        <button class="btn btn-secondary" onclick="nextTurn()" style="margin-bottom: 12px;">Next Speaker</button>
+        <button class="btn btn-primary" onclick="showScreen('votingScreen')">Go to Vote</button>
+      </div>
+    </div>
+
+    <!-- Voting Screen -->
+    <div class="screen" id="votingScreen">
+      <button class="back-btn" onclick="showScreen('gameScreen')">← Back to Game</button>
+
+      <div class="header">
+        <h2>Vote to Eliminate</h2>
+        <p class="subtitle">Tap a player to eliminate them</p>
+      </div>
+
+      <div class="card-grid" id="votingPlayerCards"></div>
+    </div>
+
+    <!-- Teams Screen -->
+    <div class="screen" id="teamsScreen">
+      <button class="back-btn" onclick="showScreen('homeScreen')">← Back</button>
+
+      <div class="header">
+        <h2>Your Teams</h2>
+      </div>
+
+      <ul class="team-list" id="teamsList"></ul>
+
+      <div class="empty-state" id="teamsEmptyState" style="display: none;">
+        <p>No teams yet. Play a game to create your first team!</p>
+      </div>
+    </div>
+
+    <!-- Settings Screen -->
+    <div class="screen" id="settingsScreen">
+      <button class="back-btn" onclick="showScreen('homeScreen')">← Back</button>
+
+      <div class="header">
+        <h2>Settings</h2>
+      </div>
+
+      <div class="settings-grid">
+        <div class="setting-item">
+          <label>Difficulty</label>
+          <select class="select" id="difficultySelect" onchange="updateSettings()">
+            <option value="easy">Easy</option>
+            <option value="mixed" selected>Mixed</option>
+            <option value="hard">Hard</option>
+          </select>
+        </div>
+
+        <div class="setting-item">
+          <label>Timer (seconds)</label>
+          <input type="number" class="select" id="timerInput" value="30" min="10" max="120" onchange="updateSettings()">
+        </div>
+
+        <div class="setting-item">
+          <label>Tie Breaker</label>
+          <select class="select" id="tieBreakerSelect" onchange="updateSettings()">
+            <option value="revote" selected>Revote</option>
+            <option value="random">Random</option>
+            <option value="none">No Elimination</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Turn Order Screen -->
+    <div class="screen" id="turnOrderScreen">
+      <div class="header">
+        <h2>Turn Order</h2>
+        <p class="subtitle" id="randomStarterAnnouncement">Starting player has been randomly selected</p>
+      </div>
+
+      <div class="card" style="margin-bottom: 24px;">
+        <h3 style="margin-bottom: 16px; text-align: center;">Speaking Order</h3>
+        <div id="turnOrderList"></div>
+      </div>
+
+      <button class="btn btn-primary" onclick="startGamePhase()">Start Discussion</button>
+    </div>
+
+    <!-- Win Screen -->
+    <div class="screen" id="winScreen">
+      <div class="winner-banner">
+        <div class="winner-title" id="winnerTitle">Civilians Win!</div>
+        <p id="winnerMessage"></p>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-bottom: 16px;">Final Roles</h3>
+        <div id="finalRoles"></div>
+      </div>
+
+      <button class="btn btn-primary" onclick="playNextRound()">Play Next Round</button>
+      <button class="btn btn-secondary" onclick="showScreen('homeScreen')">Return to Home</button>
+    </div>
+  </div>
+
+  <!-- Modals -->
+  <div class="modal" id="nameEntryModal">
+    <div class="modal-content">
+      <div class="modal-title">Enter Your Name</div>
+      <p style="text-align: center; margin-bottom: 16px; color: var(--color-text-secondary);">Player <span
+          id="modalPlayerNumber">1</span> of <span id="modalTotalPlayers">5</span></p>
+
+      <div id="nameModalSuggestion" style="display: none;"></div>
+
+      <input type="text" class="input" id="modalPlayerNameInput" placeholder="Enter your name"
+        oninput="checkModalNameSuggestion()">
+      <button class="btn btn-primary" id="modalConfirmBtn" onclick="confirmNameAndShowCards()"
+        disabled>Continue</button>
+    </div>
+  </div>
+
+  <div class="modal" id="eliminateModal">
+    <div class="modal-content">
+      <div class="modal-title">Eliminate Player?</div>
+      <p id="eliminatePlayerName" style="text-align: center; margin-bottom: 16px;"></p>
+      <div class="modal-buttons">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmEliminate()">Eliminate</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="mrWhiteGuessModal">
+    <div class="modal-content">
+      <div class="modal-title">Mr. White's Guess</div>
+      <p style="text-align: center; margin-bottom: 16px;">Guess the civilian word to win!</p>
+      <input type="text" class="input" id="mrWhiteGuessInput" placeholder="Enter your guess">
+      <button class="btn btn-primary" onclick="submitMrWhiteGuess()">Submit Guess</button>
+    </div>
+  </div>
+
+  <div class="modal" id="teamSelectionModal">
+    <div class="modal-content">
+      <div class="modal-title">Select a Team</div>
+      <p style="text-align: center; margin-bottom: 16px; color: var(--color-text-secondary);">Choose an existing team to use for this game</p>
+      <div id="teamSelectionList" class="team-selection-list"></div>
+      <div id="teamSelectionEmpty" class="empty-state" style="display: none;">
+        <p>No teams available. Create a team by playing a game first!</p>
+      </div>
+      <button class="btn btn-secondary" onclick="closeModal()" style="margin-top: 16px;">Cancel</button>
+    </div>
+  </div>
+
+  <!-- JavaScript Files -->
+  <script src="js/app.js"></script>
+  <script src="js/game.js"></script>
+</body>
+
+</html>
