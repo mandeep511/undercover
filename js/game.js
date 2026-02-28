@@ -1107,14 +1107,25 @@ const Game = {
       const session = App.state.currentSession;
       if (!session) return null;
 
-      if (session.selectedTeamId) {
-        return App.state.teams.find(t => t.id === session.selectedTeamId) || null;
+      if (App.state.selectedTeamId) {
+        return App.state.teams.find(t => t.id === App.state.selectedTeamId) || null;
       }
 
       const playerIds = this.getCurrentPlayerIdsForWordSelection();
       if (playerIds.length === 0) return null;
 
       const sortedPlayerIds = [...playerIds].sort();
+
+      if (session.previousTeamMembers && session.previousTeamMembers.length === sortedPlayerIds.length) {
+        const sortedPreviousMembers = [...session.previousTeamMembers].sort();
+        const exactPreviousTeam = App.state.teams.find(team => {
+          if (!team.members || team.members.length !== sortedPreviousMembers.length) return false;
+          const sortedMembers = [...team.members].sort();
+          return sortedMembers.every((id, idx) => id === sortedPreviousMembers[idx]);
+        });
+        if (exactPreviousTeam) return exactPreviousTeam;
+      }
+
       return App.state.teams.find(team => {
         if (!team.members || team.members.length !== sortedPlayerIds.length) return false;
         const sortedMembers = [...team.members].sort();
@@ -1157,52 +1168,27 @@ const Game = {
 
     // Get seen word pairs for current team/players
     getSeenWordPairs() {
-      const session = App.state.currentSession;
       const seenPairs = new Set();
-      
-      // Get all player IDs - check multiple sources in order of availability
-      let currentPlayerIds = [];
-      
-      if (session.players && session.players.length > 0) {
-        // Players already assigned in current session
-        currentPlayerIds = session.players.map(p => p.playerId);
-      } else if (session.previousPlayers && session.previousPlayers.length > 0) {
-        // Continuing team: use previous player IDs
-        currentPlayerIds = session.previousPlayers.map(p => p.playerId);
-      } else if (session.previousTeamMembers && session.previousTeamMembers.length > 0) {
-        // Quick start: use team member IDs
-        currentPlayerIds = session.previousTeamMembers;
+      const activeTeam = this.getActiveTeamForWordSelection();
+
+      // Prefer exact active team scope to avoid over-penalizing based on partial overlap teams.
+      if (!activeTeam) {
+        return seenPairs;
       }
 
-      if (currentPlayerIds.length === 0) {
-        return seenPairs; // No player context yet
+      if (activeTeam.seenWordPairs && Array.isArray(activeTeam.seenWordPairs)) {
+        activeTeam.seenWordPairs.forEach(pair => seenPairs.add(pair));
       }
 
-      // Find teams that share players with current session
-      const relevantTeams = App.state.teams.filter(team => {
-        if (!team.members || team.members.length === 0) return false;
-        const sharedCount = team.members.filter(id => currentPlayerIds.includes(id)).length;
-        return sharedCount > 0;
-      });
-
-      // Collect seen word pairs from relevant teams
-      for (const team of relevantTeams) {
-        // New format: seenWordPairs array
-        if (team.seenWordPairs && Array.isArray(team.seenWordPairs)) {
-          team.seenWordPairs.forEach(pair => seenPairs.add(pair));
-        }
-        
-        // Extract pairs from game history (more reliable)
-        if (team.gameHistory && Array.isArray(team.gameHistory)) {
-          team.gameHistory.forEach(game => {
-            if (game.civilianWord && game.undercoverWord) {
-              const pair1 = `${game.civilianWord}|${game.undercoverWord}`;
-              const pair2 = `${game.undercoverWord}|${game.civilianWord}`;
-              seenPairs.add(pair1);
-              seenPairs.add(pair2); // Add both orders
-            }
-          });
-        }
+      if (activeTeam.gameHistory && Array.isArray(activeTeam.gameHistory)) {
+        activeTeam.gameHistory.forEach(game => {
+          if (game.civilianWord && game.undercoverWord) {
+            const pair1 = `${game.civilianWord}|${game.undercoverWord}`;
+            const pair2 = `${game.undercoverWord}|${game.civilianWord}`;
+            seenPairs.add(pair1);
+            seenPairs.add(pair2);
+          }
+        });
       }
 
       return seenPairs;
