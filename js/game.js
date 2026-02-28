@@ -1041,79 +1041,109 @@ const Game = {
       return items.length - 1; // Fallback
     },
 
-    // Get seen word pairs for current team/players
-    getSeenWordPairs() {
+    normalizeWordPairKey(wordA, wordB) {
+      const normalizedA = String(wordA || '').trim().toLowerCase();
+      const normalizedB = String(wordB || '').trim().toLowerCase();
+      return [normalizedA, normalizedB].sort().join('|');
+    },
+
+    getCurrentSessionPlayerIds() {
       const session = App.state.currentSession;
-      const seenPairs = new Set();
-      
-      // Get all player IDs - check multiple sources in order of availability
-      let currentPlayerIds = [];
-      
+
       if (session.players && session.players.length > 0) {
-        // Players already assigned in current session
-        currentPlayerIds = session.players.map(p => p.playerId);
-      } else if (session.previousPlayers && session.previousPlayers.length > 0) {
-        // Continuing team: use previous player IDs
-        currentPlayerIds = session.previousPlayers.map(p => p.playerId);
-      } else if (session.previousTeamMembers && session.previousTeamMembers.length > 0) {
-        // Quick start: use team member IDs
-        currentPlayerIds = session.previousTeamMembers;
+        return session.players.map(p => p.playerId);
       }
 
-      if (currentPlayerIds.length === 0) {
-        return seenPairs; // No player context yet
+      if (session.previousPlayers && session.previousPlayers.length > 0) {
+        return session.previousPlayers.map(p => p.playerId);
       }
 
-      // Find teams that share players with current session
-      const relevantTeams = App.state.teams.filter(team => {
-        if (!team.members || team.members.length === 0) return false;
-        const sharedCount = team.members.filter(id => currentPlayerIds.includes(id)).length;
-        return sharedCount > 0;
-      });
-
-      // Collect seen word pairs from relevant teams
-      for (const team of relevantTeams) {
-        // New format: seenWordPairs array
-        if (team.seenWordPairs && Array.isArray(team.seenWordPairs)) {
-          team.seenWordPairs.forEach(pair => seenPairs.add(pair));
-        }
-        
-        // Extract pairs from game history (more reliable)
-        if (team.gameHistory && Array.isArray(team.gameHistory)) {
-          team.gameHistory.forEach(game => {
-            if (game.civilianWord && game.undercoverWord) {
-              const pair1 = `${game.civilianWord}|${game.undercoverWord}`;
-              const pair2 = `${game.undercoverWord}|${game.civilianWord}`;
-              seenPairs.add(pair1);
-              seenPairs.add(pair2); // Add both orders
-            }
-          });
-        }
+      if (session.previousTeamMembers && session.previousTeamMembers.length > 0) {
+        return [...session.previousTeamMembers];
       }
 
-      return seenPairs;
+      return [];
+    },
+
+    findTeamByExactMembers(playerIds) {
+      if (!playerIds || playerIds.length === 0) return null;
+
+      const sortedPlayerIds = [...playerIds].sort();
+      return App.state.teams.find(team => {
+        if (!team.members || team.members.length !== sortedPlayerIds.length) return false;
+        const sortedMembers = [...team.members].sort();
+        return sortedMembers.every((id, index) => id === sortedPlayerIds[index]);
+      }) || null;
+    },
+
+    getActiveTeamForWordSelection() {
+      const session = App.state.currentSession;
+
+      if (session.continuingTeam && session.previousPlayers && session.previousPlayers.length > 0) {
+        const continuingIds = session.previousPlayers.map(p => p.playerId);
+        return this.findTeamByExactMembers(continuingIds);
+      }
+
+      if (session.previousTeamMembers && session.previousTeamMembers.length > 0) {
+        return this.findTeamByExactMembers(session.previousTeamMembers);
+      }
+
+      const sessionPlayerIds = this.getCurrentSessionPlayerIds();
+      return this.findTeamByExactMembers(sessionPlayerIds);
+    },
+
+    ensureTeamExposureData(team) {
+      if (!team) return null;
+
+      if (!team.wordExposure || typeof team.wordExposure !== 'object' || Array.isArray(team.wordExposure)) {
+        team.wordExposure = {};
+      }
+
+      // Backward compatibility migration: seed exposure counts from old seenWordPairs.
+      if (!team.wordExposureMigrated && Array.isArray(team.seenWordPairs)) {
+        team.seenWordPairs.forEach(pair => {
+          if (!pair || typeof pair !== 'string') return;
+          const [wordA, wordB] = pair.split('|');
+          if (!wordA || !wordB) return;
+
+          const key = this.normalizeWordPairKey(wordA, wordB);
+          if (!team.wordExposure[key]) {
+            team.wordExposure[key] = { count: 0, lastSeenAt: null };
+          }
+          team.wordExposure[key].count += 1;
+        });
+      }
+
+      team.wordExposureMigrated = true;
+      return team.wordExposure;
     },
 
     selectWordPair() {
       const difficulty = App.state.settings.difficulty;
       const pairs = App.wordPairs[difficulty];
-      const seenPairs = this.getSeenWordPairs();
+      const activeTeam = this.getActiveTeamForWordSelection();
+      const wordExposure = this.ensureTeamExposureData(activeTeam) || {};
+      const now = Date.now();
+      const floorWeight = 0.2;
+      const decayWindowMs = 45 * 60 * 1000; // ~45 minutes to fade strongest recency impact
 
-      // Build weights: 90% reduction for seen words, 100% for new words
+      // Build weights using frequency + recency decay per active team.
       const weights = pairs.map(pair => {
-        // Normalize pair (both orders count as same)
-        const pair1 = `${pair.a}|${pair.b}`;
-        const pair2 = `${pair.b}|${pair.a}`;
-        const isSeen = seenPairs.has(pair1) || seenPairs.has(pair2);
-        return isSeen ? 0.1 : 1.0; // 10% weight for seen, 100% for new
-      });
+        const key = this.normalizeWordPairKey(pair.a, pair.b);
+        const exposure = wordExposure[key];
 
-      // Check if all words are exhausted (all weights are 0.1)
-      const allSeen = weights.every(w => w === 0.1);
-      if (allSeen) {
-        // Reset weights to allow all words if everything is seen
-        weights.fill(1.0);
-      }
+        if (!exposure || !exposure.count) {
+          return 1.0;
+        }
+
+        const ageMs = exposure.lastSeenAt ? Math.max(0, now - exposure.lastSeenAt) : Number.POSITIVE_INFINITY;
+        const recencyFactor = Number.isFinite(ageMs) ? Math.exp(-ageMs / decayWindowMs) : 0;
+        const frequencyPenalty = 1 - Math.exp(-0.55 * exposure.count);
+        const combinedPenalty = Math.min(0.95, frequencyPenalty * (0.35 + 0.65 * recencyFactor));
+        const weight = 1.0 - combinedPenalty;
+
+        return Math.max(floorWeight, weight);
+      });
 
       // Weighted random selection
       const selectedIndex = this.weightedRandomSelect(pairs, weights);
@@ -1337,6 +1367,7 @@ const Game = {
           name: this.generateTeamName(playerIds),
           members: playerIds,
           seenWordPairs: [], // New: store word pairs
+          wordExposure: {}, // Per-pair count + recency metadata
           seenWords: [], // Keep for backward compatibility
           lastPlayed: Date.now(),
           roleHistory: [], // Track role assignments per session
@@ -1349,10 +1380,13 @@ const Game = {
         
         // Ensure new fields exist (backward compatibility)
         if (!team.seenWordPairs) team.seenWordPairs = [];
+        if (!team.wordExposure || typeof team.wordExposure !== 'object' || Array.isArray(team.wordExposure)) team.wordExposure = {};
         if (!team.roleHistory) team.roleHistory = [];
         if (!team.gameHistory) team.gameHistory = [];
         if (!team.playerRoleStats) team.playerRoleStats = {};
       }
+
+      const wordExposure = this.ensureTeamExposureData(team);
 
       // Update team members if they've changed (fuzzy match case)
       if (team.members.length !== playerIds.length || 
@@ -1364,11 +1398,17 @@ const Game = {
 
       // Track word pairs
       if (session.civilianWord && session.undercoverWord) {
-        const wordPair = `${session.civilianWord}|${session.undercoverWord}`;
+        const wordPair = this.normalizeWordPairKey(session.civilianWord, session.undercoverWord);
         if (!team.seenWordPairs.includes(wordPair)) {
           team.seenWordPairs.push(wordPair);
           team.seenWordPairs = team.seenWordPairs.slice(-20); // Keep last 20 pairs
         }
+
+        if (!wordExposure[wordPair]) {
+          wordExposure[wordPair] = { count: 0, lastSeenAt: null };
+        }
+        wordExposure[wordPair].count += 1;
+        wordExposure[wordPair].lastSeenAt = Date.now();
       }
 
       // Backward compatibility: also update seenWords (individual words)
