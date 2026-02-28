@@ -430,6 +430,20 @@
   font-size: var(--font-size-base);
 }
 
+
+.word-bank-helper {
+  margin-top: var(--space-8);
+  margin-bottom: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.35;
+}
+
+.word-bank-warning {
+  color: var(--color-error);
+  font-weight: 600;
+}
+
 .fixed-bottom {
   position: fixed;
   bottom: 0;
