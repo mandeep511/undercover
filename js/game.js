@@ -575,14 +575,61 @@ const Game = {
 
   // ===== GAME SCREEN =====
   gameScreen: {
+    selectStarterPlayerId(candidates, team) {
+      if (!candidates || candidates.length === 0) return null;
+
+      // No team/history context available - fall back to uniform random
+      if (!team || !Array.isArray(team.startingHistory) || team.startingHistory.length === 0) {
+        return candidates[Math.floor(Math.random() * candidates.length)];
+      }
+
+      const history = team.startingHistory;
+      const lastStarterId = team.lastStartingPlayerId || history[0] || null;
+
+      // Prefer excluding last game's starter when possible
+      let filteredCandidates = candidates;
+      if (lastStarterId && candidates.length > 1) {
+        const withoutLastStarter = candidates.filter(playerId => playerId !== lastStarterId);
+        if (withoutLastStarter.length > 0) {
+          filteredCandidates = withoutLastStarter;
+        }
+      }
+
+      // Decay weights for recent starters
+      const weights = filteredCandidates.map(playerId => {
+        let weight = 1.0;
+        for (let i = 0; i < history.length; i++) {
+          if (history[i] === playerId) {
+            // Most recent starter gets the strongest penalty
+            weight *= Math.max(0.4, 0.8 - (0.2 / (i + 1)));
+          }
+        }
+        return Math.max(0.1, weight);
+      });
+
+      const selectedIndex = Game.core.weightedRandomSelect(filteredCandidates, weights);
+      return filteredCandidates[selectedIndex] || null;
+    },
+
     showTurnOrderScreen() {
       const session = App.state.currentSession;
 
-      // Randomly select starting player (0 to playerCount-1)
-      session.startingPlayerIndex = Math.floor(Math.random() * session.playerCount);
+      const currentPlayerIds = session.players.map(player => player.playerId);
+      const currentTeam = Game.core.resolveTeamByPlayerIds(currentPlayerIds);
+      const selectedStarterId = this.selectStarterPlayerId(currentPlayerIds, currentTeam);
+
+      let selectedStartingPlayerIndex = session.players.findIndex(player => player.playerId === selectedStarterId);
+
+      // Fallback to uniform random if mapping fails or no selection was made
+      if (selectedStartingPlayerIndex < 0) {
+        selectedStartingPlayerIndex = Math.floor(Math.random() * session.playerCount);
+      }
+
+      session.startingPlayerIndex = selectedStartingPlayerIndex;
+      session.startingPlayerId = session.players[session.startingPlayerIndex]?.playerId || null;
       session.currentTurnIndex = 0;
 
-      console.log(`Random starting player: Position ${session.startingPlayerIndex + 1} (${session.players[session.startingPlayerIndex].name})`);
+      console.log(`Starting player: Position ${session.startingPlayerIndex + 1} (${session.players[session.startingPlayerIndex].name})`);
 
       // Update announcement with specific starting player
       const startingPlayer = session.players[session.startingPlayerIndex];
@@ -1004,6 +1051,17 @@ const Game = {
       const team = Game.core.storeTeam();
 
       if (team) {
+        const startingPlayerId = session.players[session.startingPlayerIndex]?.playerId || session.startingPlayerId || null;
+
+        if (!team.startingHistory) team.startingHistory = [];
+        if (!('lastStartingPlayerId' in team)) team.lastStartingPlayerId = null;
+
+        if (startingPlayerId) {
+          team.lastStartingPlayerId = startingPlayerId;
+          team.startingHistory.unshift(startingPlayerId);
+          team.startingHistory = team.startingHistory.slice(0, 5); // Keep last 5 starters
+        }
+
         if (!team.gameHistory) team.gameHistory = [];
         team.gameHistory.push({
           sessionId: session.id,
@@ -1020,6 +1078,9 @@ const Game = {
           }))
         });
         team.gameHistory = team.gameHistory.slice(-10); // Keep last 10 games
+
+        // Persist starter history updates done after storeTeam()
+        App.storage.save();
       }
 
       showScreen('winScreen');
@@ -1324,6 +1385,20 @@ const Game = {
       return null;
     },
 
+    resolveTeamByPlayerIds(playerIds) {
+      if (!playerIds || playerIds.length === 0) return null;
+
+      const sortedPlayerIds = [...playerIds].sort();
+      const exactTeam = App.state.teams.find(team => {
+        if (!team.members) return false;
+        const sortedMembers = [...team.members].sort();
+        return sortedMembers.length === sortedPlayerIds.length &&
+          sortedMembers.every((id, idx) => id === sortedPlayerIds[idx]);
+      });
+
+      return exactTeam || this.findSimilarTeam(playerIds);
+    },
+
     // Generate smart team name from player names
     generateTeamName(playerIds) {
       const players = playerIds
@@ -1350,20 +1425,8 @@ const Game = {
     storeTeam() {
       const session = App.state.currentSession;
       const playerIds = session.players.map(p => p.playerId);
-      const sortedPlayerIds = [...playerIds].sort();
-
-      // Check for exact match first
-      let team = App.state.teams.find(t => {
-        if (!t.members) return false;
-        const sortedMembers = [...t.members].sort();
-        return sortedMembers.length === sortedPlayerIds.length &&
-          sortedMembers.every((id, idx) => id === sortedPlayerIds[idx]);
-      });
-
-      // If no exact match, try fuzzy matching
-      if (!team) {
-        team = this.findSimilarTeam(playerIds);
-      }
+      // Check for exact/fuzzy match
+      let team = this.resolveTeamByPlayerIds(playerIds);
 
       // Create new team or update existing
       if (!team) {
@@ -1376,7 +1439,9 @@ const Game = {
           lastPlayed: Date.now(),
           roleHistory: [], // Track role assignments per session
           gameHistory: [], // Track game results (last 10)
-          playerRoleStats: {} // Per-player role statistics
+          playerRoleStats: {}, // Per-player role statistics
+          lastStartingPlayerId: null,
+          startingHistory: []
         };
         App.state.teams.push(team);
       } else {
@@ -1387,6 +1452,8 @@ const Game = {
         if (!team.roleHistory) team.roleHistory = [];
         if (!team.gameHistory) team.gameHistory = [];
         if (!team.playerRoleStats) team.playerRoleStats = {};
+        if (!team.startingHistory) team.startingHistory = [];
+        if (!('lastStartingPlayerId' in team)) team.lastStartingPlayerId = null;
       }
 
       // Update team members if they've changed (fuzzy match case)
