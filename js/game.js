@@ -66,7 +66,7 @@ const Game = {
       const mrWhite = parseInt(document.getElementById('mrWhiteCount').textContent);
 
       // Initialize session
-      App.state.currentSession = {
+      const session = {
         id: generateId(),
         playerCount: playerCount,
         roles: { civilian, undercover, mrWhite },
@@ -81,29 +81,64 @@ const Game = {
         currentRevealedCard: null
       };
 
-      // If team was selected, use those player IDs
+      App.state.currentSession = session;
+
+      let bootstrappedSelectedTeam = false;
+
+      // If team was selected, bootstrap like play next round
       if (App.state.selectedTeamId) {
-        const selectedTeam = App.state.teams.find(t => t.id === App.state.selectedTeamId);
+        const selectedTeamId = App.state.selectedTeamId;
+        const selectedTeam = App.state.teams.find(t => t.id === selectedTeamId);
+
         if (selectedTeam && selectedTeam.members.length === playerCount) {
-          App.state.currentSession.previousTeamMembers = [...selectedTeam.members];
+          session.previousTeamMembers = [...selectedTeam.members];
+          session.previousPlayers = selectedTeam.members
+            .map(memberId => {
+              const player = App.state.players.find(p => p.id === memberId);
+              return player ? { playerId: player.id, name: player.name } : null;
+            })
+            .filter(Boolean);
+
+          if (session.previousPlayers.length === playerCount) {
+            session.continuingTeam = true;
+            bootstrappedSelectedTeam = true;
+          }
         }
-        // Clear selection after use
+
+        // Keep selectedTeamId clearing, but only after selected-team bootstrap work is done
         App.state.selectedTeamId = null;
       }
 
       // Assign roles and words immediately
       Game.core.assignRolesAndWords();
 
+      if (bootstrappedSelectedTeam) {
+        for (let i = 0; i < playerCount; i++) {
+          const previousPlayer = session.previousPlayers[i];
+          const assignment = session.assignments[i];
+
+          assignment.playerId = previousPlayer.playerId;
+          assignment.name = previousPlayer.name;
+          session.namesAssigned.push(i);
+        }
+      }
+
       document.getElementById('currentPlayerNumber').textContent = '1';
       document.getElementById('totalPlayers').textContent = playerCount;
       document.getElementById('hidePassBtn').style.display = 'none';
+
+      if (bootstrappedSelectedTeam && session.assignments[0]) {
+        document.getElementById('currentPlayerNameDisplay').textContent = session.assignments[0].name;
+      }
 
       // Show card reveal screen and render cards first
       showScreen('cardRevealScreen');
       Game.cardReveal.renderRevealCards();
 
-      // Show name entry popup
-      Game.cardReveal.showNameEntryPopup();
+      // Show name entry popup only for non-continuing sessions
+      if (!bootstrappedSelectedTeam) {
+        Game.cardReveal.showNameEntryPopup();
+      }
     },
 
     quickStart() {
