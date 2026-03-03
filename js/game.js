@@ -78,7 +78,8 @@ const Game = {
         cardsRevealed: [],
         cardsAssigned: [],
         namesAssigned: [],
-        currentRevealedCard: null
+        currentRevealedCard: null,
+        currentRunSeenWordPairs: []
       };
 
       App.state.currentSession = session;
@@ -171,7 +172,8 @@ const Game = {
         cardsAssigned: [],
         namesAssigned: [],
         currentRevealedCard: null,
-        previousTeamMembers: team.members
+        previousTeamMembers: team.members,
+        currentRunSeenWordPairs: []
       };
 
       Game.core.assignRolesAndWords();
@@ -388,7 +390,6 @@ const Game = {
         player = {
           id: generateId(),
           name: input,
-          seenWords: [],
           // New statistics tracking
           roleHistory: [], // Last 10 roles played
           teamsPlayed: [], // Team IDs this player has played with
@@ -949,7 +950,8 @@ const Game = {
             cardsAssigned: [],
             namesAssigned: [],
             currentRevealedCard: null,
-            previousTeamMembers: team.members
+            previousTeamMembers: team.members,
+            currentRunSeenWordPairs: []
           };
 
           Game.core.assignRolesAndWords();
@@ -994,7 +996,10 @@ const Game = {
         namesAssigned: [],
         currentRevealedCard: null,
         previousPlayers: previousSession.players,
-        continuingTeam: true
+        continuingTeam: true,
+        currentRunSeenWordPairs: Array.isArray(previousSession.currentRunSeenWordPairs)
+          ? [...previousSession.currentRunSeenWordPairs]
+          : []
       };
 
       // Assign new roles and words for fresh game
@@ -1257,35 +1262,98 @@ const Game = {
       return team.wordExposure;
     },
 
+    ensurePlayerWordExposureData(player) {
+      if (!player) return null;
+
+      if (!player.wordExposure || typeof player.wordExposure !== 'object' || Array.isArray(player.wordExposure)) {
+        player.wordExposure = {};
+      }
+
+      return player.wordExposure;
+    },
+
+    getCurrentRunSeenPairs(session) {
+      if (!session) return [];
+
+      if (!Array.isArray(session.currentRunSeenWordPairs)) {
+        session.currentRunSeenWordPairs = [];
+      }
+
+      return session.currentRunSeenWordPairs;
+    },
+
     selectWordPair() {
+      const session = App.state.currentSession;
       const pairs = getWordPairsForSettings(App.state.settings);
+      if (!session) {
+        return pairs[Math.floor(Math.random() * pairs.length)];
+      }
       const activeTeam = this.getActiveTeamForWordSelection();
-      const wordExposure = this.ensureTeamExposureData(activeTeam) || {};
+      const teamWordExposure = this.ensureTeamExposureData(activeTeam) || {};
+      const currentPlayerIds = [...new Set(this.getCurrentSessionPlayerIds().filter(Boolean))];
+      const currentPlayers = currentPlayerIds
+        .map(playerId => App.state.players.find(p => p.id === playerId))
+        .filter(Boolean);
       const now = Date.now();
-      const floorWeight = 0.2;
-      const decayWindowMs = 45 * 60 * 1000; // ~45 minutes to fade strongest recency impact
+      const floorWeight = 0.05;
+      const teamDecayWindowMs = 45 * 60 * 1000;
+      const playerDecayWindowMs = 90 * 60 * 1000;
 
-      // Build weights using frequency + recency decay per active team.
-      const weights = pairs.map(pair => {
+      // Current run no-repeat rule:
+      // Exclude already-used pairs in this run; if exhausted, reset and start a fresh cycle.
+      const currentRunSeenPairs = this.getCurrentRunSeenPairs(session);
+      const currentRunSeenSet = new Set(currentRunSeenPairs);
+      let candidatePairs = pairs.filter(pair => !currentRunSeenSet.has(this.normalizeWordPairKey(pair.a, pair.b)));
+      if (candidatePairs.length === 0) {
+        session.currentRunSeenWordPairs = [];
+        candidatePairs = [...pairs];
+      }
+
+      // Build weights using exact-team exposure (strong avoid) + per-player exposure (soft avoid).
+      const weights = candidatePairs.map(pair => {
         const key = this.normalizeWordPairKey(pair.a, pair.b);
-        const exposure = wordExposure[key];
+        const teamExposure = teamWordExposure[key];
 
-        if (!exposure || !exposure.count) {
-          return 1.0;
+        let teamFactor = 1.0;
+        if (teamExposure && teamExposure.count) {
+          const teamAgeMs = teamExposure.lastSeenAt
+            ? Math.max(0, now - teamExposure.lastSeenAt)
+            : Number.POSITIVE_INFINITY;
+          const teamRecency = Number.isFinite(teamAgeMs) ? Math.exp(-teamAgeMs / teamDecayWindowMs) : 0;
+          const teamFrequency = 1 - Math.exp(-0.8 * teamExposure.count);
+          const teamPenalty = Math.min(0.95, teamFrequency * (0.5 + 0.5 * teamRecency));
+          teamFactor = Math.max(floorWeight, 1 - (0.85 * teamPenalty));
         }
 
-        const ageMs = exposure.lastSeenAt ? Math.max(0, now - exposure.lastSeenAt) : Number.POSITIVE_INFINITY;
-        const recencyFactor = Number.isFinite(ageMs) ? Math.exp(-ageMs / decayWindowMs) : 0;
-        const frequencyPenalty = 1 - Math.exp(-0.55 * exposure.count);
-        const combinedPenalty = Math.min(0.95, frequencyPenalty * (0.35 + 0.65 * recencyFactor));
-        const weight = 1.0 - combinedPenalty;
+        let playerPenaltyAccumulator = 0;
+        for (const player of currentPlayers) {
+          const playerExposure = this.ensurePlayerWordExposureData(player);
+          const pairExposure = playerExposure[key];
+          if (!pairExposure || !pairExposure.count) continue;
 
-        return Math.max(floorWeight, weight);
+          const playerAgeMs = pairExposure.lastSeenAt
+            ? Math.max(0, now - pairExposure.lastSeenAt)
+            : Number.POSITIVE_INFINITY;
+          const playerRecency = Number.isFinite(playerAgeMs) ? Math.exp(-playerAgeMs / playerDecayWindowMs) : 0;
+          const playerFrequency = 1 - Math.exp(-0.55 * pairExposure.count);
+          const playerPenalty = Math.min(0.45, playerFrequency * (0.35 + 0.65 * playerRecency));
+          playerPenaltyAccumulator += playerPenalty;
+        }
+
+        const playerFactor = 1 / (1 + playerPenaltyAccumulator);
+        const combinedWeight = teamFactor * playerFactor;
+        return Math.max(floorWeight, combinedWeight);
       });
 
       // Weighted random selection
-      const selectedIndex = this.weightedRandomSelect(pairs, weights);
-      return pairs[selectedIndex];
+      const selectedIndex = this.weightedRandomSelect(candidatePairs, weights);
+      const selectedPair = candidatePairs[selectedIndex];
+      const selectedPairKey = this.normalizeWordPairKey(selectedPair.a, selectedPair.b);
+      const runSeenPairs = this.getCurrentRunSeenPairs(session);
+      if (!runSeenPairs.includes(selectedPairKey)) {
+        runSeenPairs.push(selectedPairKey);
+      }
+      return selectedPair;
     },
 
     assignRolesAndWords() {
@@ -1508,7 +1576,6 @@ const Game = {
           members: playerIds,
           seenWordPairs: [], // New: store word pairs
           wordExposure: {}, // Per-pair count + recency metadata
-          seenWords: [], // Keep for backward compatibility
           lastPlayed: Date.now(),
           roleHistory: [], // Track role assignments per session
           gameHistory: [], // Track game results (last 10)
@@ -1543,6 +1610,7 @@ const Game = {
       // Track word pairs
       if (session.civilianWord && session.undercoverWord) {
         const wordPair = this.normalizeWordPairKey(session.civilianWord, session.undercoverWord);
+        const now = Date.now();
         if (!team.seenWordPairs.includes(wordPair)) {
           team.seenWordPairs.push(wordPair);
           team.seenWordPairs = team.seenWordPairs.slice(-20); // Keep last 20 pairs
@@ -1552,21 +1620,21 @@ const Game = {
           wordExposure[wordPair] = { count: 0, lastSeenAt: null };
         }
         wordExposure[wordPair].count += 1;
-        wordExposure[wordPair].lastSeenAt = Date.now();
-      }
+        wordExposure[wordPair].lastSeenAt = now;
 
-      // Backward compatibility: also update seenWords (individual words)
-      if (session.civilianWord) {
-        if (!team.seenWords.includes(session.civilianWord)) {
-          team.seenWords.push(session.civilianWord);
+        // Track global per-player exposure so cross-team repeats are also avoided.
+        for (const sessionPlayer of session.players) {
+          const player = App.state.players.find(p => p.id === sessionPlayer.playerId);
+          if (!player) continue;
+
+          const playerWordExposure = this.ensurePlayerWordExposureData(player);
+          if (!playerWordExposure[wordPair]) {
+            playerWordExposure[wordPair] = { count: 0, lastSeenAt: null };
+          }
+          playerWordExposure[wordPair].count += 1;
+          playerWordExposure[wordPair].lastSeenAt = now;
         }
       }
-      if (session.undercoverWord) {
-        if (!team.seenWords.includes(session.undercoverWord)) {
-          team.seenWords.push(session.undercoverWord);
-        }
-      }
-      team.seenWords = [...new Set(team.seenWords)].slice(-40); // Keep last 40 individual words
 
       // Track role assignments for this session
       const sessionRoleHistory = session.players.map(p => ({
