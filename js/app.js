@@ -10,6 +10,7 @@ const App = {
       difficulty: 'mixed',
       timerSeconds: 30,
       tieBreaker: 'revote',
+      wordBank: 'general',
       minPlayers: 3,
       maxPlayers: 20
     }
@@ -127,6 +128,21 @@ const App = {
       { thoughtProcess: "Close pair - both are types of sweets. 'Chocolate' is candy, 'Candy' is generic sweets. Players might describe both as 'sweet' or 'treat', creating confusion. Some might say 'dark' vs 'colorful', but general overlap.", a: "Chocolate", b: "Candy", tags: ["food", "dessert"] },
       { thoughtProcess: "Repeats 'Escalator' from human pair. Pairs with 'Stairs' from existing pair - both vertical transportation, but one is mechanical and other is manual. Players might describe both as 'goes up' or 'steps', creating confusion.", a: "Escalator", b: "Stairs", tags: ["transport", "building"] },
       { thoughtProcess: "Repeats 'Elevator' from human pair. Pairs with 'Ladder' from existing pair - both vertical access, but elevator is mechanical and ladder is manual. Players might describe both as 'climbs' or 'up', creating confusion.", a: "Elevator", b: "Ladder", tags: ["transport", "building"] },
+      { thoughtProcess: "Both are grab-and-go drinks. Smoothie feels fruity and thick, milkshake feels creamy and indulgent.", a: "Smoothie", b: "Milkshake", tags: ["food", "drinks"] },
+      { thoughtProcess: "Both are social content habits. Podcast is long-form audio, vlog is personality-led video.", a: "Podcast", b: "Vlog", tags: ["media", "content"] },
+      { thoughtProcess: "Both are togetherness moments. Picnic is outdoors and casual; barbecue is flame-centered and hosted.", a: "Picnic", b: "Barbecue", tags: ["social", "food"] },
+      { thoughtProcess: "Both are city transport routines. Metro is rail-based; bus is road-based, but both mean commuting.", a: "Metro", b: "Bus", tags: ["transport", "city"] },
+      { thoughtProcess: "Both are winter mood visuals. Snow feels soft and serene, frost feels sharp and crisp.", a: "Snow", b: "Frost", tags: ["weather", "nature"] },
+      { thoughtProcess: "Both involve screens and gaming. Console is dedicated hardware; controller is the touchpoint in your hands.", a: "Console", b: "Controller", tags: ["gaming", "technology"] },
+      { thoughtProcess: "Both are event-night excitement. Concert is music-first; festival is mixed vibe with music, food, and crowd energy.", a: "Concert", b: "Festival", tags: ["entertainment", "social"] },
+      { thoughtProcess: "Both are table favorites. Sushi feels precise and fresh; ramen feels warm and comforting.", a: "Sushi", b: "Ramen", tags: ["food", "dining"] },
+      { thoughtProcess: "Both are photo moments in travel. Monument is human-made landmark; waterfall is natural spectacle.", a: "Monument", b: "Waterfall", tags: ["travel", "places"] },
+      { thoughtProcess: "Both are movement hobbies. Yoga emphasizes control and breath; pilates emphasizes core and form.", a: "Yoga", b: "Pilates", tags: ["fitness", "wellness"] },
+      { thoughtProcess: "Both are celebration gestures. Toast is spoken and symbolic; cheer is loud and immediate.", a: "Toast", b: "Cheer", tags: ["social", "communication"] },
+      { thoughtProcess: "Both are digital shopping cues. Coupon lowers checkout cost; wishlist delays purchase intent.", a: "Coupon", b: "Wishlist", tags: ["shopping", "lifestyle"] },
+      { thoughtProcess: "Both are weekend-reset vibes. Staycation means resting close to home; road trip means escaping with movement.", a: "Staycation", b: "Road Trip", tags: ["travel", "lifestyle"] },
+      { thoughtProcess: "Both are workspace habits. Brainstorming is idea expansion; planning is idea structuring.", a: "Brainstorm", b: "Planning", tags: ["work", "concepts"] },
+      { thoughtProcess: "Both are pet personalities. Puppy implies playful energy; kitten implies curious softness.", a: "Puppy", b: "Kitten", tags: ["animals", "pets"] },
     ],
     "hard": [
       { "a": "Moment", "b": "Opportunity", "tags": ["concepts", "abstract", "life"] },
@@ -139,6 +155,92 @@ const App = {
       { "a": "Prism", "b": "Manuscript", "tags": ["household", "concepts", "abstract"] },
       { "a": "Reformatory", "b": "Academy", "tags": ["places", "institutions", "society"] },
       { "a": "Guardian", "b": "Mentor", "tags": ["professions", "people", "society"] }
+    ]
+  },
+
+
+  wordBanks: {
+    general: {
+      label: '🌍 General Purpose',
+      description: 'Everyday words with playful overlap. Best all-rounder for mixed groups.',
+      audience: 'all'
+    },
+    tech: {
+      label: '💻 Tech & Product',
+      description: 'Modern digital-life pairs that are easy to explain without heavy jargon.',
+      audience: 'all'
+    },
+    accounting: {
+      label: '📊 Accounting & Finance',
+      description: 'Finance-flavored words designed to be intuitive, not exam-level technical.',
+      audience: 'all'
+    },
+    nsfw_general: {
+      label: '🌶️ NSFW - General',
+      description: 'Flirty nightlife themes with suggestive but party-friendly prompts.',
+      audience: 'mature'
+    },
+    nsfw_after_dark: {
+      label: '🔥 NSFW - After Dark',
+      description: 'Bolder adult themes for trusted groups. Keep this to consenting adults.',
+      audience: 'mature'
+    }
+  },
+
+  wordBankPairs: {
+    tech: [
+      { thoughtProcess: 'Both are message channels. Similar socially, but one is short-form chat and the other is long-form mail.', a: 'Slack', b: 'Email', tags: ['tech', 'communication'] },
+      { thoughtProcess: 'Both live in code workflows. A branch is temporary direction; main is the stable shared line.', a: 'Branch', b: 'Main', tags: ['tech', 'git'] },
+      { thoughtProcess: 'Both store code changes. Pull request implies review; commit is atomic and personal.', a: 'Pull Request', b: 'Commit', tags: ['tech', 'engineering'] },
+      { thoughtProcess: 'Both ship value. Feature adds capability; bugfix restores expected behavior.', a: 'Feature', b: 'Bugfix', tags: ['tech', 'product'] },
+      { thoughtProcess: 'Both measure software health. Error is broad; exception is runtime-specific.', a: 'Error', b: 'Exception', tags: ['tech', 'debugging'] },
+      { thoughtProcess: 'Both influence speed. Cache is stored shortcut; memory is active workspace.', a: 'Cache', b: 'Memory', tags: ['tech', 'systems'] },
+      { thoughtProcess: 'Both are build-time quality guards. Test checks behavior; lint checks style and patterns.', a: 'Test', b: 'Lint', tags: ['tech', 'quality'] },
+      { thoughtProcess: 'Both manage app setup. Config is values; environment is runtime context.', a: 'Config', b: 'Environment', tags: ['tech', 'devops'] },
+      { thoughtProcess: 'Both are user interactions. Click is discrete input; scroll is continuous movement.', a: 'Click', b: 'Scroll', tags: ['tech', 'ui'] },
+      { thoughtProcess: 'Both affect request speed. Query asks for data; index pre-structures access.', a: 'Query', b: 'Index', tags: ['tech', 'database'] },
+      { thoughtProcess: 'Both protect access. Password is secret phrase; passkey is cryptographic replacement.', a: 'Password', b: 'Passkey', tags: ['tech', 'security'] },
+      { thoughtProcess: 'Both handle deployment. Staging mirrors pre-release; production serves real users.', a: 'Staging', b: 'Production', tags: ['tech', 'release'] },
+      { thoughtProcess: 'Both define app structures. Component is UI unit; template is reusable blueprint.', a: 'Component', b: 'Template', tags: ['tech', 'frontend'] },
+      { thoughtProcess: 'Both are modern AI helpers. Prompt is instruction; response is generated output.', a: 'Prompt', b: 'Response', tags: ['tech', 'ai'] }
+    ],
+    accounting: [
+      { thoughtProcess: 'Both are spending categories. Expense is broader; cost often links to producing value.', a: 'Expense', b: 'Cost', tags: ['finance', 'accounting'] },
+      { thoughtProcess: 'Both increase balance sheet value. Asset is what you own; inventory is goods to sell.', a: 'Asset', b: 'Inventory', tags: ['finance', 'accounting'] },
+      { thoughtProcess: 'Both are obligations. Debt is borrowed amount; liability is broader responsibility.', a: 'Debt', b: 'Liability', tags: ['finance', 'accounting'] },
+      { thoughtProcess: 'Both measure performance. Revenue is top line; profit is what remains.', a: 'Revenue', b: 'Profit', tags: ['finance', 'business'] },
+      { thoughtProcess: 'Both reduce taxable amount. Deduction is category-based; write-off is recognized loss/expense.', a: 'Deduction', b: 'Write-off', tags: ['finance', 'tax'] },
+      { thoughtProcess: 'Both are payment instruments. Invoice requests money; receipt confirms payment.', a: 'Invoice', b: 'Receipt', tags: ['finance', 'ops'] },
+      { thoughtProcess: 'Both predict finances. Budget is planned target; forecast adapts to trend.', a: 'Budget', b: 'Forecast', tags: ['finance', 'planning'] },
+      { thoughtProcess: 'Both happen monthly. Salary is fixed pay; bonus is variable reward.', a: 'Salary', b: 'Bonus', tags: ['finance', 'payroll'] },
+      { thoughtProcess: 'Both move cash. Deposit adds funds; withdrawal removes funds.', a: 'Deposit', b: 'Withdrawal', tags: ['finance', 'banking'] },
+      { thoughtProcess: 'Both live in ledgers. Credit and debit are opposite-side entries.', a: 'Credit', b: 'Debit', tags: ['finance', 'bookkeeping'] },
+      { thoughtProcess: 'Both represent ownership value. Equity is residual interest; shares are units of ownership.', a: 'Equity', b: 'Shares', tags: ['finance', 'investing'] },
+      { thoughtProcess: 'Both define money timing. Accrual records when earned/incurred; cash records when paid.', a: 'Accrual', b: 'Cash', tags: ['finance', 'accounting'] }
+    ],
+    nsfw_general: [
+      { thoughtProcess: 'Both describe chemistry in social settings. Flirting is subtle; teasing is more playful.', a: 'Flirting', b: 'Teasing', tags: ['nsfw', 'social'] },
+      { thoughtProcess: 'Both happen at nightlife venues. Club is dance-first; lounge is chill-first.', a: 'Club', b: 'Lounge', tags: ['nsfw', 'nightlife'] },
+      { thoughtProcess: 'Both are bold looks. Lingerie is intimate apparel; swimsuit is public beachwear.', a: 'Lingerie', b: 'Swimsuit', tags: ['nsfw', 'style'] },
+      { thoughtProcess: 'Both set mood. Candlelight is cozy visual; perfume is sensory aura.', a: 'Candlelight', b: 'Perfume', tags: ['nsfw', 'atmosphere'] },
+      { thoughtProcess: 'Both are low-light social moments. Date night is planned; afterparty is spontaneous.', a: 'Date Night', b: 'Afterparty', tags: ['nsfw', 'social'] },
+      { thoughtProcess: 'Both involve physical affection. Cuddle is gentle comfort; spooning is specific closeness.', a: 'Cuddle', b: 'Spooning', tags: ['nsfw', 'affection'] },
+      { thoughtProcess: 'Both are confidence cues. Wink is quick signal; stare is sustained signal.', a: 'Wink', b: 'Stare', tags: ['nsfw', 'body-language'] },
+      { thoughtProcess: 'Both are bold communication styles. Dirty joke is comic; pickup line is intentional approach.', a: 'Dirty Joke', b: 'Pickup Line', tags: ['nsfw', 'conversation'] },
+      { thoughtProcess: 'Both include nightlife energy. DJ sets tempo; bartender sets liquid mood.', a: 'DJ', b: 'Bartender', tags: ['nsfw', 'nightlife'] },
+      { thoughtProcess: 'Both happen before plans. Sexting is explicit texting; voice note is suggestive tone-driven.', a: 'Sexting', b: 'Voice Note', tags: ['nsfw', 'digital'] }
+    ],
+    nsfw_after_dark: [
+      { thoughtProcess: 'Both imply intimate setup. Foreplay builds tension; aftercare restores comfort.', a: 'Foreplay', b: 'Aftercare', tags: ['nsfw', 'adult'] },
+      { thoughtProcess: 'Both are bedroom roles. Dominant sets pace; submissive yields control.', a: 'Dominant', b: 'Submissive', tags: ['nsfw', 'adult'] },
+      { thoughtProcess: 'Both are close-contact moments. Makeout is prolonged kiss; hookup is broader encounter.', a: 'Makeout', b: 'Hookup', tags: ['nsfw', 'adult'] },
+      { thoughtProcess: 'Both involve outfit intent. Roleplay is character-driven; costume is visual shell.', a: 'Roleplay', b: 'Costume', tags: ['nsfw', 'adult'] },
+      { thoughtProcess: 'Both use restraint language. Safe word protects boundaries; consent confirms permission.', a: 'Safe Word', b: 'Consent', tags: ['nsfw', 'boundaries'] },
+      { thoughtProcess: 'Both describe mood. Seduction is intentional build; temptation is felt pull.', a: 'Seduction', b: 'Temptation', tags: ['nsfw', 'adult'] },
+      { thoughtProcess: 'Both involve private dancing. Lap dance is performative; grind is mutual movement.', a: 'Lap Dance', b: 'Grind', tags: ['nsfw', 'dance'] },
+      { thoughtProcess: 'Both are confidence expressions. Strip tease is staged reveal; fantasy is internal script.', a: 'Strip Tease', b: 'Fantasy', tags: ['nsfw', 'adult'] },
+      { thoughtProcess: 'Both happen in private spaces. Hotel key suggests escape; house key suggests familiarity.', a: 'Hotel Key', b: 'House Key', tags: ['nsfw', 'context'] },
+      { thoughtProcess: 'Both are post-midnight vibes. Midnight text is direct ping; late call is voice intimacy.', a: 'Midnight Text', b: 'Late Call', tags: ['nsfw', 'communication'] }
     ]
   },
 
@@ -161,6 +263,17 @@ const App = {
       if (role === 'undercover') return '🕵️ Undercover';
       if (role === 'mrWhite') return '❓ Mr. White';
       return role;
+    },
+
+    getWordPairsForSettings(settings) {
+      const difficulty = settings?.difficulty || 'mixed';
+      const wordBank = settings?.wordBank || 'general';
+
+      if (wordBank === 'general') {
+        return App.wordPairs[difficulty] || App.wordPairs.mixed;
+      }
+
+      return App.wordBankPairs[wordBank] || App.wordPairs.mixed;
     }
   },
 
@@ -222,6 +335,7 @@ function generateId() { return App.utils.generateId(); }
 function normalizeName(name) { return App.utils.normalizeName(name); }
 function normalizeWord(word) { return App.utils.normalizeWord(word); }
 function getRoleDisplay(role) { return App.utils.getRoleDisplay(role); }
+function getWordPairsForSettings(settings) { return App.utils.getWordPairsForSettings(settings); }
 
 // Initialize app - load from localStorage
 document.addEventListener('DOMContentLoaded', function () {
@@ -231,6 +345,14 @@ document.addEventListener('DOMContentLoaded', function () {
   if (!App.state.selectedTeamId) {
     App.state.selectedTeamId = null;
   }
+
+  const difficultySelect = document.getElementById('difficultySelect');
+  const timerInput = document.getElementById('timerInput');
+  const tieBreakerSelect = document.getElementById('tieBreakerSelect');
+
+  if (difficultySelect) difficultySelect.value = App.state.settings.difficulty;
+  if (timerInput) timerInput.value = App.state.settings.timerSeconds;
+  if (tieBreakerSelect) tieBreakerSelect.value = App.state.settings.tieBreaker;
 
   // Update team selection button visibility if setup screen is visible
   const setupScreen = document.getElementById('setupScreen');

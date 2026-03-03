@@ -193,6 +193,43 @@ const Game = {
       App.state.settings.difficulty = document.getElementById('difficultySelect').value;
       App.state.settings.timerSeconds = parseInt(document.getElementById('timerInput').value);
       App.state.settings.tieBreaker = document.getElementById('tieBreakerSelect').value;
+      const wordBankSelect = document.getElementById('wordBankSelect');
+      if (wordBankSelect) {
+        App.state.settings.wordBank = wordBankSelect.value;
+      }
+      App.storage.save();
+    },
+
+    updateWordBankSelection() {
+      const select = document.getElementById('wordBankSelect');
+      if (!select) return;
+
+      const selectedBank = select.value;
+      App.state.settings.wordBank = selectedBank;
+
+      const descriptionEl = document.getElementById('wordBankDescription');
+      if (descriptionEl) {
+        const bankMeta = App.wordBanks[selectedBank];
+        const warning = bankMeta?.audience === 'mature' ? ' <span class="word-bank-warning">18+ only.</span>' : '';
+        descriptionEl.innerHTML = `${bankMeta?.description || ''}${warning}`;
+      }
+
+      App.storage.save();
+    },
+
+    syncSetupWordBankSelector() {
+      const select = document.getElementById('wordBankSelect');
+      if (!select) return;
+
+      const savedBank = App.state.settings.wordBank || 'general';
+      const bankExists = !!App.wordBanks[savedBank];
+      select.value = bankExists ? savedBank : 'general';
+
+      if (!bankExists) {
+        App.state.settings.wordBank = 'general';
+      }
+
+      this.updateWordBankSelection();
       App.storage.save();
     },
 
@@ -1145,6 +1182,7 @@ const Game = {
 
     getCurrentSessionPlayerIds() {
       const session = App.state.currentSession;
+      if (!session) return [];
 
       if (session.players && session.players.length > 0) {
         return session.players.map(p => p.playerId);
@@ -1174,6 +1212,11 @@ const Game = {
 
     getActiveTeamForWordSelection() {
       const session = App.state.currentSession;
+      if (!session) return null;
+
+      if (App.state.selectedTeamId) {
+        return App.state.teams.find(t => t.id === App.state.selectedTeamId) || null;
+      }
 
       if (session.continuingTeam && session.previousPlayers && session.previousPlayers.length > 0) {
         const continuingIds = session.previousPlayers.map(p => p.playerId);
@@ -1215,8 +1258,7 @@ const Game = {
     },
 
     selectWordPair() {
-      const difficulty = App.state.settings.difficulty;
-      const pairs = App.wordPairs[difficulty];
+      const pairs = getWordPairsForSettings(App.state.settings);
       const activeTeam = this.getActiveTeamForWordSelection();
       const wordExposure = this.ensureTeamExposureData(activeTeam) || {};
       const now = Date.now();
@@ -1580,6 +1622,7 @@ function adjustRole(role, delta) { Game.setup.adjustRole(role, delta); }
 function startGame() { Game.setup.startGame(); }
 function quickStart() { Game.setup.quickStart(); }
 function updateSettings() { Game.setup.updateSettings(); }
+function updateWordBankSelection() { Game.setup.updateWordBankSelection(); }
 function checkModalNameSuggestion() { Game.cardReveal.checkModalNameSuggestion(); }
 function confirmNameAndShowCards() { Game.cardReveal.confirmNameAndShowCards(); }
 function hideAndPass() { Game.cardReveal.hideAndPass(); }
@@ -1615,6 +1658,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Update team selection button visibility on setup screen
   const setupScreen = document.getElementById('setupScreen');
+  Game.setup.syncSetupWordBankSelector();
   const setupObserver = new MutationObserver(function (mutations) {
     mutations.forEach(function (mutation) {
       if (mutation.target.id === 'setupScreen' && mutation.target.classList.contains('active')) {
@@ -1622,6 +1666,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (selectTeamBtn) {
           selectTeamBtn.style.display = App.state.teams.length > 0 ? 'block' : 'none';
         }
+        Game.setup.syncSetupWordBankSelector();
       }
     });
   });
