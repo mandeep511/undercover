@@ -66,7 +66,7 @@ const Game = {
       const mrWhite = parseInt(document.getElementById('mrWhiteCount').textContent);
 
       // Initialize session
-      App.state.currentSession = {
+      const session = {
         id: generateId(),
         playerCount: playerCount,
         roles: { civilian, undercover, mrWhite },
@@ -81,29 +81,64 @@ const Game = {
         currentRevealedCard: null
       };
 
-      // If team was selected, use those player IDs
+      App.state.currentSession = session;
+
+      let bootstrappedSelectedTeam = false;
+
+      // If team was selected, bootstrap like play next round
       if (App.state.selectedTeamId) {
-        const selectedTeam = App.state.teams.find(t => t.id === App.state.selectedTeamId);
+        const selectedTeamId = App.state.selectedTeamId;
+        const selectedTeam = App.state.teams.find(t => t.id === selectedTeamId);
+
         if (selectedTeam && selectedTeam.members.length === playerCount) {
-          App.state.currentSession.previousTeamMembers = [...selectedTeam.members];
+          session.previousTeamMembers = [...selectedTeam.members];
+          session.previousPlayers = selectedTeam.members
+            .map(memberId => {
+              const player = App.state.players.find(p => p.id === memberId);
+              return player ? { playerId: player.id, name: player.name } : null;
+            })
+            .filter(Boolean);
+
+          if (session.previousPlayers.length === playerCount) {
+            session.continuingTeam = true;
+            bootstrappedSelectedTeam = true;
+          }
         }
-        // Clear selection after use
+
+        // Keep selectedTeamId clearing, but only after selected-team bootstrap work is done
         App.state.selectedTeamId = null;
       }
 
       // Assign roles and words immediately
       Game.core.assignRolesAndWords();
 
+      if (bootstrappedSelectedTeam) {
+        for (let i = 0; i < playerCount; i++) {
+          const previousPlayer = session.previousPlayers[i];
+          const assignment = session.assignments[i];
+
+          assignment.playerId = previousPlayer.playerId;
+          assignment.name = previousPlayer.name;
+          session.namesAssigned.push(i);
+        }
+      }
+
       document.getElementById('currentPlayerNumber').textContent = '1';
       document.getElementById('totalPlayers').textContent = playerCount;
       document.getElementById('hidePassBtn').style.display = 'none';
+
+      if (bootstrappedSelectedTeam && session.assignments[0]) {
+        document.getElementById('currentPlayerNameDisplay').textContent = session.assignments[0].name;
+      }
 
       // Show card reveal screen and render cards first
       showScreen('cardRevealScreen');
       Game.cardReveal.renderRevealCards();
 
-      // Show name entry popup
-      Game.cardReveal.showNameEntryPopup();
+      // Show name entry popup only for non-continuing sessions
+      if (!bootstrappedSelectedTeam) {
+        Game.cardReveal.showNameEntryPopup();
+      }
     },
 
     quickStart() {
@@ -158,12 +193,10 @@ const Game = {
       App.state.settings.difficulty = document.getElementById('difficultySelect').value;
       App.state.settings.timerSeconds = parseInt(document.getElementById('timerInput').value);
       App.state.settings.tieBreaker = document.getElementById('tieBreakerSelect').value;
-
       const wordBankSelect = document.getElementById('wordBankSelect');
       if (wordBankSelect) {
         App.state.settings.wordBank = wordBankSelect.value;
       }
-
       App.storage.save();
     },
 
@@ -197,6 +230,7 @@ const Game = {
       }
 
       this.updateWordBankSelection();
+      App.storage.save();
     },
 
     showTeamSelection() {
@@ -578,14 +612,61 @@ const Game = {
 
   // ===== GAME SCREEN =====
   gameScreen: {
+    selectStarterPlayerId(candidates, team) {
+      if (!candidates || candidates.length === 0) return null;
+
+      // No team/history context available - fall back to uniform random
+      if (!team || !Array.isArray(team.startingHistory) || team.startingHistory.length === 0) {
+        return candidates[Math.floor(Math.random() * candidates.length)];
+      }
+
+      const history = team.startingHistory;
+      const lastStarterId = team.lastStartingPlayerId || history[0] || null;
+
+      // Prefer excluding last game's starter when possible
+      let filteredCandidates = candidates;
+      if (lastStarterId && candidates.length > 1) {
+        const withoutLastStarter = candidates.filter(playerId => playerId !== lastStarterId);
+        if (withoutLastStarter.length > 0) {
+          filteredCandidates = withoutLastStarter;
+        }
+      }
+
+      // Decay weights for recent starters
+      const weights = filteredCandidates.map(playerId => {
+        let weight = 1.0;
+        for (let i = 0; i < history.length; i++) {
+          if (history[i] === playerId) {
+            // Most recent starter gets the strongest penalty
+            weight *= Math.max(0.4, 0.8 - (0.2 / (i + 1)));
+          }
+        }
+        return Math.max(0.1, weight);
+      });
+
+      const selectedIndex = Game.core.weightedRandomSelect(filteredCandidates, weights);
+      return filteredCandidates[selectedIndex] || null;
+    },
+
     showTurnOrderScreen() {
       const session = App.state.currentSession;
 
-      // Randomly select starting player (0 to playerCount-1)
-      session.startingPlayerIndex = Math.floor(Math.random() * session.playerCount);
+      const currentPlayerIds = session.players.map(player => player.playerId);
+      const currentTeam = Game.core.resolveTeamByPlayerIds(currentPlayerIds);
+      const selectedStarterId = this.selectStarterPlayerId(currentPlayerIds, currentTeam);
+
+      let selectedStartingPlayerIndex = session.players.findIndex(player => player.playerId === selectedStarterId);
+
+      // Fallback to uniform random if mapping fails or no selection was made
+      if (selectedStartingPlayerIndex < 0) {
+        selectedStartingPlayerIndex = Math.floor(Math.random() * session.playerCount);
+      }
+
+      session.startingPlayerIndex = selectedStartingPlayerIndex;
+      session.startingPlayerId = session.players[session.startingPlayerIndex]?.playerId || null;
       session.currentTurnIndex = 0;
 
-      console.log(`Random starting player: Position ${session.startingPlayerIndex + 1} (${session.players[session.startingPlayerIndex].name})`);
+      console.log(`Starting player: Position ${session.startingPlayerIndex + 1} (${session.players[session.startingPlayerIndex].name})`);
 
       // Update announcement with specific starting player
       const startingPlayer = session.players[session.startingPlayerIndex];
@@ -1007,6 +1088,17 @@ const Game = {
       const team = Game.core.storeTeam();
 
       if (team) {
+        const startingPlayerId = session.players[session.startingPlayerIndex]?.playerId || session.startingPlayerId || null;
+
+        if (!team.startingHistory) team.startingHistory = [];
+        if (!('lastStartingPlayerId' in team)) team.lastStartingPlayerId = null;
+
+        if (startingPlayerId) {
+          team.lastStartingPlayerId = startingPlayerId;
+          team.startingHistory.unshift(startingPlayerId);
+          team.startingHistory = team.startingHistory.slice(0, 5); // Keep last 5 starters
+        }
+
         if (!team.gameHistory) team.gameHistory = [];
         team.gameHistory.push({
           sessionId: session.id,
@@ -1023,6 +1115,9 @@ const Game = {
           }))
         });
         team.gameHistory = team.gameHistory.slice(-10); // Keep last 10 games
+
+        // Persist starter history updates done after storeTeam()
+        App.storage.save();
       }
 
       showScreen('winScreen');
@@ -1079,28 +1174,40 @@ const Game = {
       return items.length - 1; // Fallback
     },
 
-    canonicalWordPairKey(wordA, wordB) {
-      const normalized = [normalizeWord(wordA), normalizeWord(wordB)].sort();
-      return `${normalized[0]}|${normalized[1]}`;
+    normalizeWordPairKey(wordA, wordB) {
+      const normalizedA = String(wordA || '').trim().toLowerCase();
+      const normalizedB = String(wordB || '').trim().toLowerCase();
+      return [normalizedA, normalizedB].sort().join('|');
     },
 
-    getCurrentPlayerIdsForWordSelection() {
+    getCurrentSessionPlayerIds() {
       const session = App.state.currentSession;
       if (!session) return [];
 
       if (session.players && session.players.length > 0) {
-        return session.players.map(p => p.playerId).filter(Boolean);
+        return session.players.map(p => p.playerId);
       }
 
       if (session.previousPlayers && session.previousPlayers.length > 0) {
-        return session.previousPlayers.map(p => p.playerId).filter(Boolean);
+        return session.previousPlayers.map(p => p.playerId);
       }
 
       if (session.previousTeamMembers && session.previousTeamMembers.length > 0) {
-        return session.previousTeamMembers.filter(Boolean);
+        return [...session.previousTeamMembers];
       }
 
       return [];
+    },
+
+    findTeamByExactMembers(playerIds) {
+      if (!playerIds || playerIds.length === 0) return null;
+
+      const sortedPlayerIds = [...playerIds].sort();
+      return App.state.teams.find(team => {
+        if (!team.members || team.members.length !== sortedPlayerIds.length) return false;
+        const sortedMembers = [...team.members].sort();
+        return sortedMembers.every((id, index) => id === sortedPlayerIds[index]);
+      }) || null;
     },
 
     getActiveTeamForWordSelection() {
@@ -1111,123 +1218,72 @@ const Game = {
         return App.state.teams.find(t => t.id === App.state.selectedTeamId) || null;
       }
 
-      const playerIds = this.getCurrentPlayerIdsForWordSelection();
-      if (playerIds.length === 0) return null;
-
-      const sortedPlayerIds = [...playerIds].sort();
-
-      if (session.previousTeamMembers && session.previousTeamMembers.length === sortedPlayerIds.length) {
-        const sortedPreviousMembers = [...session.previousTeamMembers].sort();
-        const exactPreviousTeam = App.state.teams.find(team => {
-          if (!team.members || team.members.length !== sortedPreviousMembers.length) return false;
-          const sortedMembers = [...team.members].sort();
-          return sortedMembers.every((id, idx) => id === sortedPreviousMembers[idx]);
-        });
-        if (exactPreviousTeam) return exactPreviousTeam;
+      if (session.continuingTeam && session.previousPlayers && session.previousPlayers.length > 0) {
+        const continuingIds = session.previousPlayers.map(p => p.playerId);
+        return this.findTeamByExactMembers(continuingIds);
       }
 
-      return App.state.teams.find(team => {
-        if (!team.members || team.members.length !== sortedPlayerIds.length) return false;
-        const sortedMembers = [...team.members].sort();
-        return sortedMembers.every((id, idx) => id === sortedPlayerIds[idx]);
-      }) || null;
+      if (session.previousTeamMembers && session.previousTeamMembers.length > 0) {
+        return this.findTeamByExactMembers(session.previousTeamMembers);
+      }
+
+      const sessionPlayerIds = this.getCurrentSessionPlayerIds();
+      return this.findTeamByExactMembers(sessionPlayerIds);
     },
 
     ensureTeamExposureData(team) {
       if (!team) return null;
 
-      if (!team.wordExposure || typeof team.wordExposure !== 'object') {
+      if (!team.wordExposure || typeof team.wordExposure !== 'object' || Array.isArray(team.wordExposure)) {
         team.wordExposure = {};
       }
 
-      if (team.seenWordPairs && Array.isArray(team.seenWordPairs)) {
+      // Backward compatibility migration: seed exposure counts from old seenWordPairs.
+      if (!team.wordExposureMigrated && Array.isArray(team.seenWordPairs)) {
         team.seenWordPairs.forEach(pair => {
-          const [a, b] = pair.split('|');
-          if (!a || !b) return;
-          const key = this.canonicalWordPairKey(a, b);
+          if (!pair || typeof pair !== 'string') return;
+          const [wordA, wordB] = pair.split('|');
+          if (!wordA || !wordB) return;
+
+          const key = this.normalizeWordPairKey(wordA, wordB);
           if (!team.wordExposure[key]) {
-            team.wordExposure[key] = { count: 1, lastSeenAt: 0 };
+            team.wordExposure[key] = { count: 0, lastSeenAt: null };
           }
+          team.wordExposure[key].count += 1;
         });
       }
 
-      if (team.gameHistory && Array.isArray(team.gameHistory)) {
-        team.gameHistory.forEach(game => {
-          if (!game.civilianWord || !game.undercoverWord) return;
-          const key = this.canonicalWordPairKey(game.civilianWord, game.undercoverWord);
-          if (!team.wordExposure[key]) {
-            team.wordExposure[key] = { count: 0, lastSeenAt: 0 };
-          }
-          team.wordExposure[key].count = Math.max(team.wordExposure[key].count || 0, 1);
-          team.wordExposure[key].lastSeenAt = Math.max(team.wordExposure[key].lastSeenAt || 0, game.timestamp || 0);
-        });
-      }
-
+      team.wordExposureMigrated = true;
       return team.wordExposure;
-    },
-
-    // Get seen word pairs for current team/players
-    getSeenWordPairs() {
-      const seenPairs = new Set();
-      const activeTeam = this.getActiveTeamForWordSelection();
-
-      // Prefer exact active team scope to avoid over-penalizing based on partial overlap teams.
-      if (!activeTeam) {
-        return seenPairs;
-      }
-
-      if (activeTeam.seenWordPairs && Array.isArray(activeTeam.seenWordPairs)) {
-        activeTeam.seenWordPairs.forEach(pair => seenPairs.add(pair));
-      }
-
-      if (activeTeam.gameHistory && Array.isArray(activeTeam.gameHistory)) {
-        activeTeam.gameHistory.forEach(game => {
-          if (game.civilianWord && game.undercoverWord) {
-            const pair1 = `${game.civilianWord}|${game.undercoverWord}`;
-            const pair2 = `${game.undercoverWord}|${game.civilianWord}`;
-            seenPairs.add(pair1);
-            seenPairs.add(pair2);
-          }
-        });
-      }
-
-      return seenPairs;
     },
 
     selectWordPair() {
       const pairs = getWordPairsForSettings(App.state.settings);
-      const seenPairs = this.getSeenWordPairs();
       const activeTeam = this.getActiveTeamForWordSelection();
       const wordExposure = this.ensureTeamExposureData(activeTeam) || {};
       const now = Date.now();
       const floorWeight = 0.2;
       const decayWindowMs = 45 * 60 * 1000; // ~45 minutes to fade strongest recency impact
 
-      // Build weights using both legacy seen tracking and new recency/frequency exposure.
+      // Build weights using frequency + recency decay per active team.
       const weights = pairs.map(pair => {
-        const pair1 = `${pair.a}|${pair.b}`;
-        const pair2 = `${pair.b}|${pair.a}`;
-        const isSeen = seenPairs.has(pair1) || seenPairs.has(pair2);
-        const exposureKey = this.canonicalWordPairKey(pair.a, pair.b);
-        const exposure = wordExposure[exposureKey];
+        const key = this.normalizeWordPairKey(pair.a, pair.b);
+        const exposure = wordExposure[key];
 
-        if (!exposure) {
-          return isSeen ? 0.35 : 1.0;
+        if (!exposure || !exposure.count) {
+          return 1.0;
         }
 
-        const count = Math.max(1, exposure.count || 1);
-        const ageMs = Math.max(0, now - (exposure.lastSeenAt || 0));
-        const recencyFactor = Math.max(0, 1 - (ageMs / decayWindowMs));
-
-        // More repeats + more recent use => lower odds, while still keeping possibility alive.
-        const frequencyPenalty = 1 / (1 + (count * 0.65));
-        const recencyPenalty = 1 - (0.65 * recencyFactor);
-        const seenPenalty = isSeen ? 0.55 : 1.0;
-        const weight = frequencyPenalty * recencyPenalty * seenPenalty;
+        const ageMs = exposure.lastSeenAt ? Math.max(0, now - exposure.lastSeenAt) : Number.POSITIVE_INFINITY;
+        const recencyFactor = Number.isFinite(ageMs) ? Math.exp(-ageMs / decayWindowMs) : 0;
+        const frequencyPenalty = 1 - Math.exp(-0.55 * exposure.count);
+        const combinedPenalty = Math.min(0.95, frequencyPenalty * (0.35 + 0.65 * recencyFactor));
+        const weight = 1.0 - combinedPenalty;
 
         return Math.max(floorWeight, weight);
       });
 
+      // Weighted random selection
       const selectedIndex = this.weightedRandomSelect(pairs, weights);
       return pairs[selectedIndex];
     },
@@ -1401,6 +1457,20 @@ const Game = {
       return null;
     },
 
+    resolveTeamByPlayerIds(playerIds) {
+      if (!playerIds || playerIds.length === 0) return null;
+
+      const sortedPlayerIds = [...playerIds].sort();
+      const exactTeam = App.state.teams.find(team => {
+        if (!team.members) return false;
+        const sortedMembers = [...team.members].sort();
+        return sortedMembers.length === sortedPlayerIds.length &&
+          sortedMembers.every((id, idx) => id === sortedPlayerIds[idx]);
+      });
+
+      return exactTeam || this.findSimilarTeam(playerIds);
+    },
+
     // Generate smart team name from player names
     generateTeamName(playerIds) {
       const players = playerIds
@@ -1427,20 +1497,8 @@ const Game = {
     storeTeam() {
       const session = App.state.currentSession;
       const playerIds = session.players.map(p => p.playerId);
-      const sortedPlayerIds = [...playerIds].sort();
-
-      // Check for exact match first
-      let team = App.state.teams.find(t => {
-        if (!t.members) return false;
-        const sortedMembers = [...t.members].sort();
-        return sortedMembers.length === sortedPlayerIds.length &&
-          sortedMembers.every((id, idx) => id === sortedPlayerIds[idx]);
-      });
-
-      // If no exact match, try fuzzy matching
-      if (!team) {
-        team = this.findSimilarTeam(playerIds);
-      }
+      // Check for exact/fuzzy match
+      let team = this.resolveTeamByPlayerIds(playerIds);
 
       // Create new team or update existing
       if (!team) {
@@ -1449,12 +1507,14 @@ const Game = {
           name: this.generateTeamName(playerIds),
           members: playerIds,
           seenWordPairs: [], // New: store word pairs
+          wordExposure: {}, // Per-pair count + recency metadata
           seenWords: [], // Keep for backward compatibility
-          wordExposure: {}, // Per-team word pair exposure metadata
           lastPlayed: Date.now(),
           roleHistory: [], // Track role assignments per session
           gameHistory: [], // Track game results (last 10)
-          playerRoleStats: {} // Per-player role statistics
+          playerRoleStats: {}, // Per-player role statistics
+          lastStartingPlayerId: null,
+          startingHistory: []
         };
         App.state.teams.push(team);
       } else {
@@ -1462,11 +1522,15 @@ const Game = {
         
         // Ensure new fields exist (backward compatibility)
         if (!team.seenWordPairs) team.seenWordPairs = [];
-        if (!team.wordExposure) team.wordExposure = {};
+        if (!team.wordExposure || typeof team.wordExposure !== 'object' || Array.isArray(team.wordExposure)) team.wordExposure = {};
         if (!team.roleHistory) team.roleHistory = [];
         if (!team.gameHistory) team.gameHistory = [];
         if (!team.playerRoleStats) team.playerRoleStats = {};
+        if (!team.startingHistory) team.startingHistory = [];
+        if (!('lastStartingPlayerId' in team)) team.lastStartingPlayerId = null;
       }
+
+      const wordExposure = this.ensureTeamExposureData(team);
 
       // Update team members if they've changed (fuzzy match case)
       if (team.members.length !== playerIds.length || 
@@ -1476,21 +1540,19 @@ const Game = {
         team.name = this.generateTeamName(playerIds);
       }
 
-      // Track word pairs and exposure
+      // Track word pairs
       if (session.civilianWord && session.undercoverWord) {
-        const wordPair = `${session.civilianWord}|${session.undercoverWord}`;
+        const wordPair = this.normalizeWordPairKey(session.civilianWord, session.undercoverWord);
         if (!team.seenWordPairs.includes(wordPair)) {
           team.seenWordPairs.push(wordPair);
           team.seenWordPairs = team.seenWordPairs.slice(-20); // Keep last 20 pairs
         }
 
-        const exposure = this.ensureTeamExposureData(team);
-        const pairKey = this.canonicalWordPairKey(session.civilianWord, session.undercoverWord);
-        if (!exposure[pairKey]) {
-          exposure[pairKey] = { count: 0, lastSeenAt: 0 };
+        if (!wordExposure[wordPair]) {
+          wordExposure[wordPair] = { count: 0, lastSeenAt: null };
         }
-        exposure[pairKey].count += 1;
-        exposure[pairKey].lastSeenAt = Date.now();
+        wordExposure[wordPair].count += 1;
+        wordExposure[wordPair].lastSeenAt = Date.now();
       }
 
       // Backward compatibility: also update seenWords (individual words)
@@ -1597,7 +1659,6 @@ document.addEventListener('DOMContentLoaded', function () {
   // Update team selection button visibility on setup screen
   const setupScreen = document.getElementById('setupScreen');
   Game.setup.syncSetupWordBankSelector();
-
   const setupObserver = new MutationObserver(function (mutations) {
     mutations.forEach(function (mutation) {
       if (mutation.target.id === 'setupScreen' && mutation.target.classList.contains('active')) {
