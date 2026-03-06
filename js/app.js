@@ -10,6 +10,7 @@ const App = {
       difficulty: 'mixed',
       timerSeconds: 30,
       tieBreaker: 'revote',
+      mrWhiteFirstDiscussion: false,
       wordBank: 'general',
       minPlayers: 3,
       maxPlayers: 20
@@ -349,10 +350,14 @@ document.addEventListener('DOMContentLoaded', function () {
   const difficultySelect = document.getElementById('difficultySelect');
   const timerInput = document.getElementById('timerInput');
   const tieBreakerSelect = document.getElementById('tieBreakerSelect');
+  const mrWhiteFirstTurnSelect = document.getElementById('mrWhiteFirstTurnSelect');
 
   if (difficultySelect) difficultySelect.value = App.state.settings.difficulty;
   if (timerInput) timerInput.value = App.state.settings.timerSeconds;
   if (tieBreakerSelect) tieBreakerSelect.value = App.state.settings.tieBreaker;
+  if (mrWhiteFirstTurnSelect) {
+    mrWhiteFirstTurnSelect.value = App.state.settings.mrWhiteFirstDiscussion ? 'include' : 'exclude';
+  }
 
   // Update team selection button visibility if setup screen is visible
   const setupScreen = document.getElementById('setupScreen');

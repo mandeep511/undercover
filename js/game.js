@@ -195,6 +195,10 @@ const Game = {
       App.state.settings.difficulty = document.getElementById('difficultySelect').value;
       App.state.settings.timerSeconds = parseInt(document.getElementById('timerInput').value);
       App.state.settings.tieBreaker = document.getElementById('tieBreakerSelect').value;
+      const mrWhiteFirstTurnSelect = document.getElementById('mrWhiteFirstTurnSelect');
+      if (mrWhiteFirstTurnSelect) {
+        App.state.settings.mrWhiteFirstDiscussion = mrWhiteFirstTurnSelect.value === 'include';
+      }
       const wordBankSelect = document.getElementById('wordBankSelect');
       if (wordBankSelect) {
         App.state.settings.wordBank = wordBankSelect.value;
@@ -233,6 +237,15 @@ const Game = {
 
       this.updateWordBankSelection();
       App.storage.save();
+    },
+
+    syncSettingsControls() {
+      this.syncSetupWordBankSelector();
+
+      const mrWhiteFirstTurnSelect = document.getElementById('mrWhiteFirstTurnSelect');
+      if (mrWhiteFirstTurnSelect) {
+        mrWhiteFirstTurnSelect.value = App.state.settings.mrWhiteFirstDiscussion ? 'include' : 'exclude';
+      }
     },
 
     showTeamSelection() {
@@ -651,11 +664,19 @@ const Game = {
 
     showTurnOrderScreen() {
       const session = App.state.currentSession;
-
+      const includeMrWhiteInStarterPool = !!App.state.settings.mrWhiteFirstDiscussion;
       const currentPlayerIds = session.players.map(player => player.playerId);
-      const currentTeam = Game.core.resolveTeamByPlayerIds(currentPlayerIds);
-      const selectedStarterId = this.selectStarterPlayerId(currentPlayerIds, currentTeam);
+      let starterCandidates = session.players
+        .filter(player => includeMrWhiteInStarterPool || player.role !== 'mrWhite')
+        .map(player => player.playerId);
 
+      // Safety fallback: if filtering empties the pool, use all players.
+      if (starterCandidates.length === 0) {
+        starterCandidates = [...currentPlayerIds];
+      }
+
+      const currentTeam = Game.core.resolveTeamByPlayerIds(currentPlayerIds);
+      const selectedStarterId = this.selectStarterPlayerId(starterCandidates, currentTeam);
       let selectedStartingPlayerIndex = session.players.findIndex(player => player.playerId === selectedStarterId);
 
       // Fallback to uniform random if mapping fails or no selection was made
@@ -679,7 +700,7 @@ const Game = {
       const turnOrderList = document.getElementById('turnOrderList');
       turnOrderList.innerHTML = '';
 
-      // Create turn order rotation starting from random player
+      // Create turn order rotation starting from selected player
       for (let i = 0; i < session.playerCount; i++) {
         const playerIndex = (session.startingPlayerIndex + i) % session.playerCount;
         const player = session.players[playerIndex];
@@ -1726,7 +1747,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Update team selection button visibility on setup screen
   const setupScreen = document.getElementById('setupScreen');
-  Game.setup.syncSetupWordBankSelector();
+  Game.setup.syncSettingsControls();
   const setupObserver = new MutationObserver(function (mutations) {
     mutations.forEach(function (mutation) {
       if (mutation.target.id === 'setupScreen' && mutation.target.classList.contains('active')) {
@@ -1734,7 +1755,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (selectTeamBtn) {
           selectTeamBtn.style.display = App.state.teams.length > 0 ? 'block' : 'none';
         }
-        Game.setup.syncSetupWordBankSelector();
+        Game.setup.syncSettingsControls();
       }
     });
   });
